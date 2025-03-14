@@ -28,6 +28,18 @@ class SimGrid:
 
         self.timePassed = 0
 
+    def setHumanGrowth(self, growth):
+        self.humanGrowth = growth
+
+    def setHumanLoss(self, loss):
+        self.getHumanCount = loss
+
+    def setZombieGrowth(self, growth):
+        self.zombieGrowth = growth
+
+    def setZombieLoss(self, loss):
+        self.zombieLoss = loss
+
     def _initialize_grid(self, z0, h0):
         self._initialize_population(z0, self.zombieDir)
         self._initialize_population(h0, self.humanDir)
@@ -41,6 +53,7 @@ class SimGrid:
     
     def propagate(self, timeStep=1):
         """ Given a timestep goes over every cell, and applies the growth and loss equations for either humans or zombies """
+        self.timePassed += timeStep
         self.grid = simNjits.propagate(self.grid, timeStep, self.zombieGrowth, self.zombieLoss, self.zombieDir,
                                         self.humanGrowth, self.humanLoss, self.humanDir, self.MAXCELL, self.moveProb)
 
@@ -73,6 +86,9 @@ class SimGrid:
             return abs(np.sum(self.grid[self.grid < 0]))
         else:
             return abs(np.sum(self.grid[self.grid > 0]))
+
+    def isApocalypse(self):
+        return self.getHumanPopulation() == 0 or self.getZombiePopulation() == 0
 
 if __name__ == "__main__":
     grid = SimGrid(1000, 0.5, 0.1, 1000, 0.2, 0, 1000)
