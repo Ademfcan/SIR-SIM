@@ -192,6 +192,7 @@ def reset_simulation():
     global human_growth, human_loss, zombie_growth, zombie_loss, grid_size
 
     reset_button.setStyleSheet("")
+    reset_button.setText("Reset")
 
 
     # Reinitialize the grid with new parameters
@@ -281,7 +282,8 @@ def simulation_step():
         
 
     if not paused and not grid.isApocalypse():
-        hitApoc = False
+        if hitApoc:
+            hitApoc = False
         grid.propagate(0.1 * currentSpeedFactor)
         time_stamps.append(grid.timePassed)
         zombie_populations_sim.append(grid.getZombiePopulation())
