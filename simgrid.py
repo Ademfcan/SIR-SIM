@@ -9,7 +9,7 @@ class SimGrid:
         gridCellCount = squareSize * squareSize  # nearest "resolution of grid"
         return gridCellCount, squareSize
 
-    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, gridCellCount=1000, moveProb=0.2):
+    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, gridCellCount=1000, moveProb=0.6):
         self.popSize = populationSize
         self.moveProb = moveProb
 
@@ -71,7 +71,7 @@ class SimGrid:
         return self.__getPopulation(self.humanDir)
 
     def getRecoveredPopulation(self):
-        return self.totalRecovered
+        return min(self.totalRecovered,self.popSize-self.getHumanPopulation()-self.getZombiePopulation())
 
     def getHumanCount(self):
         return self.__getFilled(self.humanDir)

@@ -7,12 +7,12 @@ from simgrid import SimGrid
 from solve_rk import Solver
 
 # Initial conditions
-INIT_POPSIZE = 10
-INIT_Z0 = 1
+INIT_POPSIZE = int(1e4)
+INIT_Z0 = int(2e2)
 INIT_INFECTION_GROWTH = 0.3
 INIT_HUMAN_LOSS = 0
 INIT_ZOMBIE_LOSS = 0
-INITGRIDSIZE = 40
+INITGRIDSIZE = int(1e4)
 
 # Simulation speed settings
 INIT_SPEEDS = [1, 2, 5, 0.5, 0.1]
@@ -70,8 +70,8 @@ grid_view.ui.menuBtn.hide()  # Hides the menu button
 grid_view.ui.histogram.hide()
 
 # Define custom colormap
-custom_cmap = pg.ColorMap(pos=[0.0, 0.5, 1.0],
-                          color=[(0, 100, 0), (255, 0, 0), (0, 0, 139)])
+custom_cmap = pg.ColorMap(pos=[0.0, 1.0],
+                          color=[(0, 100, 0), (0, 0, 139)])
 grid_view.setColorMap(custom_cmap)
 grid_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 layout.addWidget(grid_view, stretch=2)
@@ -159,14 +159,14 @@ def update_grid():
     grid_view.setImage(current_grid.T, autoLevels=False)
 
 def update_sim_plot():
-    zombie_curve_sim.setData(time_stamps, zombie_populations_sim)
-    human_curve_sim.setData(time_stamps, human_populations_sim)
-    recovered_curve_sim.setData(time_stamps, recovered_populations_sim)
+    zombie_curve_sim.setData(time_stamps[:len(zombie_populations_solver)], zombie_populations_sim)
+    human_curve_sim.setData(time_stamps[:len(human_populations_solver)], human_populations_sim)
+    recovered_curve_sim.setData(time_stamps[:len(recovered_populations_sim)], recovered_populations_sim)
 
 def update_solver_plot():
-    zombie_curve_solver.setData(time_stamps, zombie_populations_solver)
-    human_curve_solver.setData(time_stamps, human_populations_solver)
-    recovered_curve_solver.setData(time_stamps, recovered_populations_solver)
+    zombie_curve_solver.setData(time_stamps[:len(zombie_populations_solver)], zombie_populations_solver)
+    human_curve_solver.setData(time_stamps[:len(human_populations_solver)], human_populations_solver)
+    recovered_curve_solver.setData(time_stamps[:len(recovered_populations_solver)], recovered_populations_solver)
 
 def toggle_pause():
     global paused
