@@ -3,42 +3,47 @@ import math
 import simNjits
 
 class SimGrid:
-    def __init__(self, z0, zombieGrowth, zombieLoss, h0, humanGrowth, humanLoss, gridCellCount=1000, MAX=1e7, moveProb=0.9):
-        self.MAX = MAX
+    @staticmethod
+    def getNearestSquareCellCount(gridCellCount : int):
+        squareSize = math.ceil(math.sqrt(gridCellCount))
+        gridCellCount = squareSize * squareSize  # nearest "resolution of grid"
+        return gridCellCount, squareSize
+
+    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, gridCellCount=1000, moveProb=0.2):
+        self.popSize = populationSize
         self.moveProb = moveProb
-        
+
+        self.infectionGrowth = infectionGrowth  # growth percentage per day
+
         self.z0 = z0  # initial amount of zombies
-        self.zombieGrowth = zombieGrowth  # growth percentage per day
         self.zombieLoss = zombieLoss  # death percentage per day
         self.zombieDir = -1
         
-        self.h0 = h0  # initial amount of humans
-        self.humanGrowth = humanGrowth  # growth percentage per day
-        self.humanLoss = humanLoss  # death percentage per day
+        self.h0 = populationSize-z0  # initial amount of humans
+        self.humanLoss = humanLoss
         self.humanDir = 1
 
-        self.squareSize = math.ceil(math.sqrt(gridCellCount))
-        self.gridCellCount = self.squareSize * self.squareSize  # nearest "resolution of grid"
-        self.MAXCELL = self.MAX / self.gridCellCount
+        self.totalRecovered = 0
+
+        self.gridCellCount, self.squareSize = SimGrid.getNearestSquareCellCount(gridCellCount)
+
+        
 
         self.grid = np.zeros(shape=(self.squareSize, self.squareSize), dtype=np.float64)
 
         # Initialize with initial conditions
-        self._initialize_grid(z0, h0)
+        self._initialize_grid(self.z0, self.h0)
 
         self.timePassed = 0
 
-    def setHumanGrowth(self, growth):
-        self.humanGrowth = growth
-
-    def setHumanLoss(self, loss):
-        self.getHumanCount = loss
-
-    def setZombieGrowth(self, growth):
-        self.zombieGrowth = growth
+    def setinfectionGrowth(self, growth):
+        self.infectionGrowth = growth
 
     def setZombieLoss(self, loss):
         self.zombieLoss = loss
+    
+    def setHumanLoss(self, loss):
+        self.humanLoss = loss
 
     def _initialize_grid(self, z0, h0):
         self._initialize_population(z0, self.zombieDir)
@@ -54,9 +59,9 @@ class SimGrid:
     def propagate(self, timeStep=1):
         """ Given a timestep goes over every cell, and applies the growth and loss equations for either humans or zombies """
         self.timePassed += timeStep
-        self.grid = simNjits.propagate(self.grid, timeStep, self.zombieGrowth, self.zombieLoss, self.zombieDir,
-                                        self.humanGrowth, self.humanLoss, self.humanDir, self.MAXCELL, self.moveProb)
-
+        self.grid, recovered = simNjits.propagate(self.grid, timeStep, self.infectionGrowth, self.zombieLoss, self.humanLoss,
+                                       self.zombieDir, self.humanDir, self.moveProb, self.popSize)
+        self.totalRecovered += recovered
     
     # Population counts and utility methods
     def getZombiePopulation(self):
@@ -65,8 +70,8 @@ class SimGrid:
     def getHumanPopulation(self):
         return self.__getPopulation(self.humanDir)
 
-    def getEmptyCount(self):
-        return self.__getFilled(0)
+    def getRecoveredPopulation(self):
+        return self.totalRecovered
 
     def getHumanCount(self):
         return self.__getFilled(self.humanDir)
@@ -88,11 +93,12 @@ class SimGrid:
             return abs(np.sum(self.grid[self.grid > 0]))
 
     def isApocalypse(self):
-        return self.getHumanPopulation() == 0 or self.getZombiePopulation() == 0
+        return False
+        # return np.isclose(self.getHumanPopulation(),0,atol=1e-5) or np.isclose(self.getZombiePopulation(),0,atol=1e-5)
 
 if __name__ == "__main__":
-    grid = SimGrid(1000, 0.5, 0.1, 1000, 0.2, 0, 1000)
-    print(f"Humans: {grid.getHumanPopulation()} Zombies: {grid.getZombiePopulation()} Empty: {grid.getEmptyCount()}")
+    grid = SimGrid(1000, 10,0.1, 0.5, 0.1)
+    print(f"Humans: {grid.getHumanPopulation()} Zombies: {grid.getZombiePopulation()} Empty: {grid.getRecoveredPopulation()}")
     grid.propagate(1)
-    print(f"Humans: {grid.getHumanPopulation()} Zombies: {grid.getZombiePopulation()} Empty: {grid.getEmptyCount()}")
+    print(f"Humans: {grid.getHumanPopulation()} Zombies: {grid.getZombiePopulation()} Empty: {grid.getRecoveredPopulation()}")
     print(grid.grid.size)

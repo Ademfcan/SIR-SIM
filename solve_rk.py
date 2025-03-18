@@ -1,71 +1,78 @@
 import numpy as np
+from scipy.integrate import solve_ivp
 
 class Solver:
-    def __init__(self, z0, zombieGrowth, zombieLoss, h0, humanGrowth, humanLoss, maxPopulation, minPopulation=0, tolerance=1e-6):
-        # Initial conditions and parameters
-        self.z0 = z0
-        self.h0 = h0
-        self.zombieGrowth = zombieGrowth
-        self.zombieLoss = zombieLoss
-        self.humanGrowth = humanGrowth
-        self.humanLoss = humanLoss
-        self.maxPop = maxPopulation
-        self.minPop = minPopulation
-        self.tolerance = tolerance  # Change threshold for stopping the simulation
+    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, block_size=30):
+        self.h0 = populationSize-z0  # Initial human population
+        self.z0 = z0  # Initial zombie population
+        self.infectionGrowth = infectionGrowth    # Infection rate
+        self.humanLoss = humanLoss    # Additional loss term for humans
+        self.zombieLoss = zombieLoss    # Recovery rate
+        self.block_size = block_size  # Time block size
+        self.total_population = populationSize  # Assume constant total
 
-        # Initial population values
-        self.t = 0
-        self.z = z0
-        self.h = h0
-        self.dt = 0.001  # Small time step for the Runge-Kutta method
+        self.blocks = {}  # Cache for computed time blocks
+        self.current_max_t = 0  # Track how far we've computed
 
-    def equations(self, z, h):
-        """ Defines the system of differential equations """
-        dzdt = z * self.zombieGrowth * - h * z * self.zombieLoss
-        dhdt = h * self.humanGrowth * - h * z * self.humanLoss
-        return dzdt, dhdt
+    def _model(self, t, y):
+        """Differential equations for H and Z."""
+        H, Z = y
+        dHdt = -self.infectionGrowth * H * Z - self.humanLoss * Z
+        dZdt = self.infectionGrowth * H * Z - self.zombieLoss * H
+        return [dHdt, dZdt]
 
-    def runge_kutta_step(self, z, h, dt):
-        """ Perform a single Runge-Kutta 4th order step """
-        k1z, k1h = self.equations(z, h)
-        k2z, k2h = self.equations(z + 0.5 * dt * k1z, h + 0.5 * dt * k1h)
-        k3z, k3h = self.equations(z + 0.5 * dt * k2z, h + 0.5 * dt * k2h)
-        k4z, k4h = self.equations(z + dt * k3z, h + dt * k3h)
+    def _solve_block(self, start_t):
+        """Solve the system from start_t to start_t + block_size and store it."""
+        previous_end_values = [self.h0, self.z0]
 
-        # Update z and h using the weighted average of the slopes
-        new_z = z + (dt / 6) * (k1z + 2 * k2z + 2 * k3z + k4z)
-        new_h = h + (dt / 6) * (k1h + 2 * k2h + 2 * k3h + k4h)
+        # If there is a previous block, use its last values as initial conditions
+        if self.blocks:
+            last_block_start = max(self.blocks.keys())
+            previous_end_values = self.blocks[last_block_start].y[:, -1]
 
-        # Enforce population limits
-        new_z = min(max(new_z, self.minPop), self.maxPop)
-        new_h = min(max(new_h, self.minPop), self.maxPop)
+        t_span = (start_t, start_t + self.block_size)
+        t_eval = np.linspace(*t_span, num=100)  # 100 points in the block
+        sol = solve_ivp(self._model, t_span, previous_end_values, t_eval=t_eval, method="RK45")
+        
+        # Store the block in the cache
+        self.blocks[start_t] = sol
+        self.current_max_t = max(self.current_max_t, start_t + self.block_size)
 
-        return new_z, new_h
+    def _get_nearest_value(self, sol, t):
+        """Find the nearest computed value in a solved block."""
+        idx = np.abs(sol.t - t).argmin()
+        return sol.y[:, idx]
 
-    def update_time(self, t_new):
-        """ Update the solver with a new time t_new """
-        delta_t = t_new - self.t  # Calculate the time step
+    def getHumanPopulation(self, t):
+        """Return H(t), computing new blocks if needed."""
+        if t > self.current_max_t:
+            while t > self.current_max_t:
+                self._solve_block(self.current_max_t)
 
-        if abs(delta_t) < self.tolerance:
-            return self.z, self.h  # No change if the time step is negligible
+        for start_t, sol in self.blocks.items():
+            if start_t <= t <= start_t + self.block_size:
+                return self._get_nearest_value(sol, t)[0]  # H value
 
-        # Adjust time step for larger intervals, to avoid looping too many times
-        steps = int(abs(delta_t) / self.dt)  # Number of small steps needed
+    def getZombiePopulation(self, t):
+        """Return Z(t), computing new blocks if needed."""
+        if t > self.current_max_t:
+            while t > self.current_max_t:
+                self._solve_block(self.current_max_t)
 
-        # Run the simulation in small steps until reaching t_new
-        for _ in range(steps):
-            self.z, self.h = self.runge_kutta_step(self.z, self.h, self.dt)
-            self.t += self.dt
+        for start_t, sol in self.blocks.items():
+            if start_t <= t <= start_t + self.block_size:
+                return self._get_nearest_value(sol, t)[1]  # Z value
 
-        return self.z, self.h
+    def getRecoveredPopulation(self, t):
+        """Return recovered population R(t)."""
+        return self.total_population - self.getHumanPopulation(t) - self.getZombiePopulation(t)
 
-    def getZombiePrediction(self, t_new):
-        """ Get zombie population prediction for a given new time t_new """
-        new_z, _ = self.update_time(t_new)
-        return new_z
+if __name__ == "__main__":
+    solver = Solver(1000, 1, 0.3, 0.2, 0)
+    print("Solving ivp....")
+    h = solver.getHumanPopulation(1000)
+    print("Solved ivps....")
+    z = solver.getZombiePopulation(1000)
+    r = solver.getRecoveredPopulation(1000)
 
-    def getHumanPrediction(self, t_new):
-        """ Get human population prediction for a given new time t_new """
-        _, new_h = self.update_time(t_new)
-        return new_h
-    
+    print(f"{h=} {z=} {r=}")

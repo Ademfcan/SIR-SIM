@@ -1,11 +1,12 @@
-from numba import njit
 import numpy as np
+import numba
+from numba import njit, prange
+from numba.typed import Dict
+from numba.core import types
 
 @njit
 def shuffle_array(arr):
-    # Create a random number generator
-    
-    # Shuffle the array using the Fisher-Yates algorithm
+    """ Fisher-Yates shuffle implementation for Numba """
     n = len(arr)
     for i in range(n - 1, 0, -1):
         j = np.random.randint(0, i + 1)
@@ -14,8 +15,8 @@ def shuffle_array(arr):
 
 @njit
 def getNeighbors(grid, row, col):
-    dxs = shuffle_array([-1, 0, 1])
-    dys = shuffle_array([-1, 0, 1])
+    dxs = shuffle_array(np.array([-1, 0, 1]))
+    dys = shuffle_array(np.array([-1, 0, 1]))
     neighbors = []
     for dx in dxs:
         for dy in dys:
@@ -26,79 +27,114 @@ def getNeighbors(grid, row, col):
                 neighbors.append((newRow, newCol))
     return neighbors
 
-
 @njit
-def propagateCELL(grid, row, col, changeGrid, zombieGrowth, zombieLoss, zombieDir, humanGrowth, humanLoss, humanDir, MAXCELL, moveProb):
+def propagateInteractionsCELL(grid, row, col, changeGrid, interactionMap, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir) -> int:
     pop = grid[row, col]
-    if np.isclose(pop,0):
-        return  # nothing to do if the cell is empty
+    if np.isclose(pop, 0):
+        return 0 # Skip empty cells
     
-    popAbs = abs(pop)
-
-    isHumanDominated = pop > 0
-    growthConst = humanGrowth if isHumanDominated else zombieGrowth
-    lossConst = humanLoss if isHumanDominated else zombieLoss
-    growthDir = humanDir if isHumanDominated else zombieDir
-    
-    newPopGrowthAbs = popAbs * growthConst
-    newPopLossAbs = 0
+    cellPopAbs = abs(pop)
+    cellIsHumanDominated = pop > 0
+    cellLoss = humanLoss if cellIsHumanDominated else zombieLoss
+    cellGrowthDir = humanDir if cellIsHumanDominated else zombieDir
 
     neighbors = getNeighbors(grid, row, col)
 
-    # Go over each neighbor and calculate interactions (loss phase)
-    for neighborRow, neighborCol in neighbors:
+    recovered = 0
+
+    for neighborRow, neighborCol in neighbors:    
         neighborPop = grid[neighborRow, neighborCol]
-        neighborPopAbs = abs(neighborPop)
-        
-        if neighborPop == 0:
+        neighborHumanDominated = neighborPop > 0
+        isInteraction = cellIsHumanDominated != neighborHumanDominated  # Must be opposite types
+
+        if np.isclose(neighborPop, 0) or not isInteraction:
             continue
         
-        neighborHumanDominated = neighborPop > 0
-        isInteraction = isHumanDominated != neighborHumanDominated
+        if interactionMap[row, col, neighborRow, neighborCol]:
+            continue  # Skip already processed interaction
 
-        if isInteraction:
-            neighborLoss = humanLoss if neighborHumanDominated else zombieLoss
-            neighborDir = humanDir if neighborHumanDominated else zombieDir
+        neighborPopAbs = abs(neighborPop)
 
-            gridLossAbs = neighborPopAbs * lossConst
-            neighborLossAbs = popAbs * neighborLoss
+        interactionAbs = cellPopAbs * neighborPopAbs         
 
-            newPopLossAbs += gridLossAbs
+        neighborLoss = humanLoss if neighborHumanDominated else zombieLoss
+        neighborGrowthDir = humanDir if neighborHumanDominated else zombieDir
 
-            changeGrid[neighborRow, neighborCol] -= neighborLossAbs * neighborDir
-
-    newPopAbs = popAbs + newPopGrowthAbs - newPopLossAbs
-
-    minLeavePerCell = 0
-    if newPopAbs > MAXCELL:
-        minLeavePerCell = (newPopAbs - MAXCELL) / 8
-
-    # Go over each neighbor and calculate growth from this cell
-    for neighborRow, neighborCol in neighbors:
-        if np.random.random() > moveProb:
-            continue  # not 'lucky' enough to move
+        change = interactionAbs * infectionGrowth * zombieDir
         
-        if newPopGrowthAbs <= 0:
-            break  # used all growth already
+        cellChangeLoss = neighborPopAbs * cellLoss * cellGrowthDir
+        cellChange = change - cellChangeLoss 
 
-        amountLeaveAbs = np.random.uniform(minLeavePerCell, newPopGrowthAbs)
-        newPopGrowthAbs -= amountLeaveAbs
+        
+        neighborChangeLoss = cellPopAbs * neighborLoss * neighborGrowthDir
+        neighborChange = change - neighborChangeLoss
 
-        changeGrid[neighborRow, neighborCol] += amountLeaveAbs * growthDir
+        if cellIsHumanDominated:
+            recovered += abs(neighborChangeLoss)
+        else:
+            recovered += abs(cellChangeLoss)
 
-    finalDelta = newPopGrowthAbs - newPopLossAbs
-    changeGrid[row, col] += finalDelta * growthDir
+        changeGrid[row, col] += cellChange
+        changeGrid[neighborRow, neighborCol] += neighborChange
 
+        # **Mark This Interaction As Processed**
+        interactionMap[row, col, neighborRow, neighborCol] = True
+        interactionMap[neighborRow, neighborCol, row, col] = True  # Ensure symmetry
+    
+    return recovered
 
 @njit
-def propagate(grid, timeStep, zombieGrowth, zombieLoss, zombieDir, humanGrowth, humanLoss, humanDir, MAXCELL, moveProb):
+def propagateMovementCELL(grid, row, col, movementGrid, zombieDir, humanDir, moveProb):
+    cellPop = grid[row, col]
+    if np.isclose(cellPop,0,atol=1e-3):
+        return
+
+    cellHumanDominated = cellPop > 0
+    cellGrowthDir = humanDir if cellHumanDominated else zombieDir
+    cellPopAbs = abs(cellPop)
+    neighbors = getNeighbors(grid, row, col)
+
+    for neighborRow, neighborCol in neighbors:
+        if cellPopAbs <= 0:
+            break  # Used all growth already
+
+        if np.random.random() > moveProb:
+            continue  # Skip movement if not lucky
+
+        neighborPop = grid[neighborRow, neighborCol]
+        neigborHumanDominated = neighborPop > 0
+        isInteraction = cellHumanDominated != neigborHumanDominated
+
+        if np.isclose(neighborPop,0,atol=1e-3) or not isInteraction:
+            amountLeaveAbs = np.random.uniform(0, cellPopAbs)
+            cellPopAbs -= amountLeaveAbs
+
+            movementGrid[neighborRow, neighborCol] += amountLeaveAbs * cellGrowthDir
+
+    movementGrid[row, col] += cellPopAbs * cellGrowthDir
+
+@njit
+def propagate(grid, timeStep, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir, moveProb, totalPop):
     changeGrid = np.zeros_like(grid, dtype=np.float64)
-    for row in range(grid.shape[0]):
-        for col in range(grid.shape[1]):
-            propagateCELL(grid, row, col, changeGrid, zombieGrowth, zombieLoss, zombieDir, humanGrowth, humanLoss, humanDir, MAXCELL, moveProb)
+    movementGrid = np.zeros_like(grid, dtype=np.float64)
     
+    # **Optimized: Use Boolean NumPy Array Instead of Set**
+    interactionMap = np.zeros((grid.shape[0], grid.shape[1], grid.shape[0], grid.shape[1]), dtype=np.bool_)
+    totalRecovered = 0
+    # **Parallelize Interaction Phase**
+    for row in prange(grid.shape[0]):
+        for col in range(grid.shape[1]):
+            totalRecovered += propagateInteractionsCELL(grid, row, col, changeGrid, interactionMap, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir)
+    
+    # **Update Grid with Changes**
     changeTimeScaled = changeGrid * timeStep
     updatedGrid = np.add(grid, changeTimeScaled)
 
-    return np.clip(updatedGrid, -MAXCELL, MAXCELL)
-
+    # **Parallelize Movement Phase**
+    for row in prange(grid.shape[0]):
+        for col in range(grid.shape[1]):
+            propagateMovementCELL(updatedGrid, row, col, movementGrid, zombieDir, humanDir, moveProb)
+    
+    # maxPerCell = totalPop/updatedGrid.size
+    maxPerCell = totalPop
+    return np.clip(movementGrid,-maxPerCell,maxPerCell), totalRecovered

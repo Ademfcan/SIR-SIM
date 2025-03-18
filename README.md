@@ -1,6 +1,6 @@
 # Population Simulation Experiment
 
-This repository tests how simulating a competing population compares to differential equation models.
+This repository tests how simulating an SIR model for an epidemic compares to the same models differential equation.
 
 ## Requirements
 This was created using python 3.13.1, but will likely work on older (3.9+) versions 
@@ -12,5 +12,5 @@ Ensure dependencies are installed using:
 ## Running the Simulation
 To run the simulation, run the following file:
 
-```python display.py```
+```python Simulation.py```
 
