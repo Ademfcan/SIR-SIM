@@ -28,7 +28,7 @@ def getNeighbors(grid, row, col):
     return neighbors
 
 @njit
-def propagateInteractionsCELL(grid, row, col, changeGrid, interactionMap, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir) -> int:
+def propagateInteractionsCELL(grid, row, col, changeGrid, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir):
     pop = grid[row, col]
     if np.isclose(pop, 0):
         return 0 # Skip empty cells
@@ -40,8 +40,6 @@ def propagateInteractionsCELL(grid, row, col, changeGrid, interactionMap, infect
 
     neighbors = getNeighbors(grid, row, col)
 
-    recovered = 0
-
     for neighborRow, neighborCol in neighbors:    
         neighborPop = grid[neighborRow, neighborCol]
         neighborHumanDominated = neighborPop > 0
@@ -49,13 +47,10 @@ def propagateInteractionsCELL(grid, row, col, changeGrid, interactionMap, infect
 
         if np.isclose(neighborPop, 0) or not isInteraction:
             continue
-        
-        if interactionMap[row, col, neighborRow, neighborCol]:
-            continue  # Skip already processed interaction
 
         neighborPopAbs = abs(neighborPop)
 
-        interactionAbs = cellPopAbs * neighborPopAbs         
+        interactionAbs = min(cellPopAbs,neighborPopAbs) # imagine that one zombie can interact with 1 person max         
 
         neighborLoss = humanLoss if neighborHumanDominated else zombieLoss
         neighborGrowthDir = humanDir if neighborHumanDominated else zombieDir
@@ -69,19 +64,9 @@ def propagateInteractionsCELL(grid, row, col, changeGrid, interactionMap, infect
         neighborChangeLoss = cellPopAbs * neighborLoss * neighborGrowthDir
         neighborChange = change - neighborChangeLoss
 
-        if cellIsHumanDominated:
-            recovered += abs(neighborChangeLoss)
-        else:
-            recovered += abs(cellChangeLoss)
-
         changeGrid[row, col] += cellChange
-        changeGrid[neighborRow, neighborCol] += neighborChange
+        # changeGrid[neighborRow, neighborCol] += neighborChange
 
-        # **Mark This Interaction As Processed**
-        interactionMap[row, col, neighborRow, neighborCol] = True
-        interactionMap[neighborRow, neighborCol, row, col] = True  # Ensure symmetry
-    
-    return recovered
 
 @njit
 def propagateMovementCELL(grid, row, col, movementGrid, zombieDir, humanDir, moveProb):
@@ -113,28 +98,39 @@ def propagateMovementCELL(grid, row, col, movementGrid, zombieDir, humanDir, mov
 
     movementGrid[row, col] += cellPopAbs * cellGrowthDir
 
-@njit
-def propagate(grid, timeStep, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir, moveProb, totalPop):
+@njit(parallel=True)
+def _propagate(grid, timeStep, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir, moveProb, totalPop):
     changeGrid = np.zeros_like(grid, dtype=np.float64)
     movementGrid = np.zeros_like(grid, dtype=np.float64)
     
-    # **Optimized: Use Boolean NumPy Array Instead of Set**
-    interactionMap = np.zeros((grid.shape[0], grid.shape[1], grid.shape[0], grid.shape[1]), dtype=np.bool_)
-    totalRecovered = 0
-    # **Parallelize Interaction Phase**
-    for row in prange(grid.shape[0]):
-        for col in range(grid.shape[1]):
-            totalRecovered += propagateInteractionsCELL(grid, row, col, changeGrid, interactionMap, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir)
+    rows, cols = grid.shape
+
+    for i in prange(rows * cols):  # Single prange over all elements
+        row, col = divmod(i, cols)
+        propagateInteractionsCELL(grid, int(row), int(col), changeGrid, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir)
     
-    # **Update Grid with Changes**
     changeTimeScaled = changeGrid * timeStep
     updatedGrid = np.add(grid, changeTimeScaled)
 
-    # **Parallelize Movement Phase**
-    for row in prange(grid.shape[0]):
-        for col in range(grid.shape[1]):
-            propagateMovementCELL(updatedGrid, row, col, movementGrid, zombieDir, humanDir, moveProb)
+    for i in range(rows * cols):  # Single prange over all elements
+        row, col = divmod(i, cols)
+        propagateMovementCELL(updatedGrid, int(row), int(col), movementGrid, zombieDir, humanDir, moveProb)
     
     # maxPerCell = totalPop/updatedGrid.size
-    maxPerCell = totalPop
-    return np.clip(movementGrid,-maxPerCell,maxPerCell), totalRecovered
+    # return np.clip(movementGrid,-maxPerCell,maxPerCell), totalRecovered
+    return movementGrid
+
+
+@njit
+def propagate(grid, timeStep, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir, moveProb, totalPop, maxStepSize):
+    if timeStep <= maxStepSize:
+        return _propagate(grid, timeStep, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir, moveProb, totalPop)
+    else:
+        finalGrid = None
+
+        while timeStep > 0:
+            smallStep = min(timeStep, maxStepSize) # for when:  0 < timestep < maxStepsize
+            timeStep -= maxStepSize
+            finalGrid = _propagate(grid, smallStep, infectionGrowth, zombieLoss, humanLoss, zombieDir, humanDir, moveProb, totalPop)
+
+        return finalGrid

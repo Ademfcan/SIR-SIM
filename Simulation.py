@@ -1,8 +1,8 @@
 import sys
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtCore import QCoreApplication, QThread, pyqtSignal, QTimer
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QPushButton, QComboBox, QLineEdit, QSizePolicy
+from PyQt5.QtCore import QCoreApplication, QThread, pyqtSignal, QTimer, Qt
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QPushButton, QComboBox, QLineEdit, QSizePolicy, QLabel
 from simgrid import SimGrid
 from solve_rk import Solver
 
@@ -60,6 +60,10 @@ app = QApplication(sys.argv)
 win = QMainWindow()
 central_widget = QWidget()
 layout = QVBoxLayout()
+legend_label = QLabel("Green: Zombies | Blue: Humans | Red: Recovered/Dead Zombies")
+legend_label.setAlignment(Qt.AlignCenter)  # Center the text
+legend_label.setStyleSheet("font-size: 20px; font-weight: bold;")  # Make it more visible
+layout.addWidget(legend_label)  # Add it at the top of the layout
 central_widget.setLayout(layout)
 win.setCentralWidget(central_widget)
 
@@ -159,14 +163,20 @@ def update_grid():
     grid_view.setImage(current_grid.T, autoLevels=False)
 
 def update_sim_plot():
-    zombie_curve_sim.setData(time_stamps[:len(zombie_populations_solver)], zombie_populations_sim)
-    human_curve_sim.setData(time_stamps[:len(human_populations_solver)], human_populations_sim)
-    recovered_curve_sim.setData(time_stamps[:len(recovered_populations_sim)], recovered_populations_sim)
+    min_z_sim = min(len(time_stamps),len(zombie_populations_sim))
+    zombie_curve_sim.setData(time_stamps[:min_z_sim], zombie_populations_sim[:min_z_sim])
+    min_h_sim = min(len(time_stamps),len(human_populations_sim))
+    human_curve_sim.setData(time_stamps[:min_h_sim], human_populations_sim[:min_h_sim])
+    min_r_sim = min(len(time_stamps),len(recovered_populations_sim))
+    recovered_curve_sim.setData(time_stamps[:min_r_sim], recovered_populations_sim[:min_r_sim])
 
 def update_solver_plot():
-    zombie_curve_solver.setData(time_stamps[:len(zombie_populations_solver)], zombie_populations_solver)
-    human_curve_solver.setData(time_stamps[:len(human_populations_solver)], human_populations_solver)
-    recovered_curve_solver.setData(time_stamps[:len(recovered_populations_solver)], recovered_populations_solver)
+    min_z_sol = min(len(time_stamps),len(zombie_populations_solver))
+    zombie_curve_solver.setData(time_stamps[:min_z_sol], zombie_populations_solver[:min_z_sol])
+    min_h_sol = min(len(time_stamps),len(human_populations_solver))
+    human_curve_solver.setData(time_stamps[:min_h_sol], human_populations_solver[:min_h_sol])
+    min_r_sol = min(len(time_stamps),len(recovered_populations_solver))
+    recovered_curve_solver.setData(time_stamps[:min_r_sol], recovered_populations_solver[:min_r_sol])
 
 def toggle_pause():
     global paused
@@ -257,7 +267,7 @@ class SimulationThread(QThread):
             else:
                 if hitApoc:
                     hitApoc = False
-                grid.propagate(0.1 * currentSpeedFactor)
+                grid.propagate(currentSpeedFactor)
                 time_stamps.append(grid.timePassed)
                 z_sim, h_sim, r_sim = grid.getZombiePopulation(), grid.getHumanPopulation(), grid.getRecoveredPopulation()
                 zombie_populations_sim.append(z_sim)
@@ -265,7 +275,7 @@ class SimulationThread(QThread):
                 recovered_populations_sim.append(r_sim)
                 
                 # Solver computations if necessary
-                z_sol, h_sol, r_sol = solver.getZombiePopulation(grid.timePassed), solver.getHumanPopulation(grid.timePassed), solver.getRecoveredPopulation(grid.timePassed) # Replace with real solver output
+                z_sol, h_sol, r_sol = solver.getZombiePopulation(grid.timePassed/30), solver.getHumanPopulation(grid.timePassed/30), solver.getRecoveredPopulation(grid.timePassed/30) # Replace with real solver output
                 zombie_populations_solver.append(z_sol)
                 human_populations_solver.append(h_sol)
                 recovered_populations_solver.append(r_sol)

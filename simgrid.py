@@ -3,6 +3,7 @@ import math
 import simNjits
 
 class SimGrid:
+    MAXSTEPSIZE = 1
     @staticmethod
     def getNearestSquareCellCount(gridCellCount : int):
         squareSize = math.ceil(math.sqrt(gridCellCount))
@@ -23,7 +24,6 @@ class SimGrid:
         self.humanLoss = humanLoss
         self.humanDir = 1
 
-        self.totalRecovered = 0
 
         self.gridCellCount, self.squareSize = SimGrid.getNearestSquareCellCount(gridCellCount)
 
@@ -59,9 +59,8 @@ class SimGrid:
     def propagate(self, timeStep=1):
         """ Given a timestep goes over every cell, and applies the growth and loss equations for either humans or zombies """
         self.timePassed += timeStep
-        self.grid, recovered = simNjits.propagate(self.grid, timeStep, self.infectionGrowth, self.zombieLoss, self.humanLoss,
-                                       self.zombieDir, self.humanDir, self.moveProb, self.popSize)
-        self.totalRecovered += recovered
+        self.grid = simNjits.propagate(self.grid, timeStep, self.infectionGrowth, self.zombieLoss, self.humanLoss,
+                                    self.zombieDir, self.humanDir, self.moveProb, self.popSize, self.MAXSTEPSIZE)
     
     # Population counts and utility methods
     def getZombiePopulation(self):
@@ -71,7 +70,7 @@ class SimGrid:
         return self.__getPopulation(self.humanDir)
 
     def getRecoveredPopulation(self):
-        return min(self.totalRecovered,self.popSize-self.getHumanPopulation()-self.getZombiePopulation())
+        return self.popSize-self.getHumanPopulation()-self.getZombiePopulation()
 
     def getHumanCount(self):
         return self.__getFilled(self.humanDir)

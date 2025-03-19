@@ -12,7 +12,7 @@ class Solver:
         self.total_population = populationSize  # Assume constant total
 
         self.blocks = {}  # Cache for computed time blocks
-        self.current_max_t = 0  # Track how far we've computed
+        self.current_max_t = -1  # Track how far we've computed
 
     def _model(self, t, y):
         """Differential equations for H and Z."""
@@ -31,7 +31,7 @@ class Solver:
             previous_end_values = self.blocks[last_block_start].y[:, -1]
 
         t_span = (start_t, start_t + self.block_size)
-        t_eval = np.linspace(*t_span, num=100)  # 100 points in the block
+        t_eval = np.linspace(*t_span, num=2*self.block_size)  # 100 points in the block
         sol = solve_ivp(self._model, t_span, previous_end_values, t_eval=t_eval, method="RK45")
         
         # Store the block in the cache
@@ -52,6 +52,8 @@ class Solver:
         for start_t, sol in self.blocks.items():
             if start_t <= t <= start_t + self.block_size:
                 return self._get_nearest_value(sol, t)[0]  # H value
+        print(f"Could not get block!: {self.blocks} {self.current_max_t} {t}")
+        return None
 
     def getZombiePopulation(self, t):
         """Return Z(t), computing new blocks if needed."""
@@ -62,6 +64,8 @@ class Solver:
         for start_t, sol in self.blocks.items():
             if start_t <= t <= start_t + self.block_size:
                 return self._get_nearest_value(sol, t)[1]  # Z value
+        print(f"Could not get block!: {self.blocks} {self.current_max_t} {t}")
+        return None
 
     def getRecoveredPopulation(self, t):
         """Return recovered population R(t)."""
