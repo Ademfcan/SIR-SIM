@@ -7,49 +7,45 @@ from simgrid import SimGrid
 from solve_rk import Solver
 
 # Initial conditions
-INIT_POPSIZE = int(1e4)
+INIT_POPSIZE = int(1e3)
 INIT_Z0 = int(2e2)
-INIT_INFECTION_GROWTH = 0.3
+INIT_INFECTION_GROWTH = 0.01
 INIT_HUMAN_LOSS = 0
-INIT_ZOMBIE_LOSS = 0
-INITGRIDSIZE = int(1e4)
+INIT_ZOMBIE_LOSS = 0.005
+INITGRIDSIZE = int(1e3)
 
 # Simulation speed settings
-INIT_SPEEDS = [1, 2, 5, 0.5, 0.1]
+speeds = [1, 2, 5, 0.5, 0.1]
 speed_idx = 0
 currentSpeedFactor = 1
 paused = False
 
-preset_names = [
-    "Default",
-    "Savanna Equilibrium",
-    "Wolf Overrun",
-    "Endless Rivalry",
-    "Alien Invasion",
-    "Herbivore Revolution",
-    "Mutual Destruction",
-    "Silent Infection",
-    "Rainforest Harmony"
-]
 
-preset_values = {
-    "Default": {"a": INIT_INFECTION_GROWTH, "b": INIT_ZOMBIE_LOSS, "c": INIT_HUMAN_LOSS},
-    "Savanna Equilibrium": {"a": 0.8, "b": 0.6, "c": 0.5},
-    "Wolf Overrun": {"a": 1.2, "b": 1.0, "c": 0.6},
-    "Endless Rivalry": {"a": 1.0, "b": 0.7, "c": 1.0},
-    "Alien Invasion": {"a": 1.3, "b": 0.5, "c": 0.8},
-    "Herbivore Revolution": {"a": 0.5, "b": 0.3, "c": 1.2},
-    "Mutual Destruction": {"a": 0.9, "b": 1.2, "c": 0.9},
-    "Silent Infection": {"a": 0.6, "b": 0.2, "c": 0.4},
-    "Rainforest Harmony": {"a": 0.9, "b": 0.5, "c": 0.9}
+preset_values_eq = {
+    "Classic Apocalypse": {"a": INIT_INFECTION_GROWTH, "b": INIT_ZOMBIE_LOSS, "c": INIT_HUMAN_LOSS},
+    "Raging Outbreak": {"a": 0.1, "b": 0.002, "c": 0},
+    "Human Resistance": {"a": 0.02, "b": 0.02, "c": 0},
+    "Human Uprising": {"a": 0.02, "b": 0.1, "c": 0},
+    "Doomsday Virus": {"a": 0.1, "b": 0, "c": 0},
 }
 
-def changePresets(preset_name):
-    global infection_growth, zombie_loss, human_loss
-    values = preset_values[preset_name]
+preset_values_init_pop = {
+    "Small Infection": {"pop": 1010, "z0": 10},
+    "Progressed Infection": {"pop": 1100, "z0": 100},
+    "\"The 0.1%\"": {"pop": 1000, "z0": 1},
+}
+
+def changePresetsEq(preset_name):
+    values = preset_values_eq[preset_name]
     infection_growth_input.setText(str(values["a"]))
     zombie_loss_input.setText(str(values["b"]))
     human_loss_input.setText(str(values["c"]))
+
+def changePresetsInitPop(preset_name):
+    values = preset_values_init_pop[preset_name]
+    total_pop_input.setText(str(values["pop"]))
+    init_z0_input.setText(str(values["z0"]))
+
 
 # Create the initial helpers
 grid = SimGrid(INIT_POPSIZE, INIT_Z0, INIT_INFECTION_GROWTH, INIT_ZOMBIE_LOSS, INIT_HUMAN_LOSS, INITGRIDSIZE)
@@ -60,7 +56,7 @@ app = QApplication(sys.argv)
 win = QMainWindow()
 central_widget = QWidget()
 layout = QVBoxLayout()
-legend_label = QLabel("Green: Zombies | Blue: Humans | Red: Recovered/Dead Zombies")
+legend_label = QLabel("Green: Zombies | Blue: Humans")
 legend_label.setAlignment(Qt.AlignCenter)  # Center the text
 legend_label.setStyleSheet("font-size: 20px; font-weight: bold;")  # Make it more visible
 layout.addWidget(legend_label)  # Add it at the top of the layout
@@ -91,7 +87,6 @@ plot_widget_sim.setLabel('left', "Population Count")
 plot_widget_sim.setLabel('bottom', "Days Passed")
 zombie_curve_sim = plot_widget_sim.plot(pen='g', name="Zombies", width=6)
 human_curve_sim = plot_widget_sim.plot(pen='b', name="Humans", width=3)
-recovered_curve_sim = plot_widget_sim.plot(pen="red", name="Recovered", width=3)
 
 # Second plot widget
 plot_widget_solver = pg.PlotWidget()
@@ -101,7 +96,6 @@ plot_widget_solver.setLabel('left', "Population Count")
 plot_widget_solver.setLabel('bottom', "Days Passed")
 zombie_curve_solver = plot_widget_solver.plot(pen='g', name="Zombies", width=6)
 human_curve_solver = plot_widget_solver.plot(pen='b', name="Humans", width=3)
-recovered_curve_solver = plot_widget_solver.plot(pen='red', name="Recovered", width=3)
 
 # Add plot layout to main layout
 layout.addLayout(plot_layout, stretch=1)
@@ -113,13 +107,17 @@ layout.addLayout(button_layout, stretch=0)
 pause_button = QPushButton("Pause")
 reset_button = QPushButton("Reset")
 speed_button = QPushButton("Speed x1")
-constantPreset = QComboBox()
-constantPreset.addItems(preset_names)
-constantPreset.currentIndexChanged.connect(lambda event: changePresets(constantPreset.currentText()))
+constantPresetEq = QComboBox()
+constantPresetEq.addItems(preset_values_eq.keys())
+constantPresetEq.currentIndexChanged.connect(lambda event: changePresetsEq(constantPresetEq.currentText()))
+constantPresetInitPop = QComboBox()
+constantPresetInitPop.addItems(preset_values_init_pop.keys())
+constantPresetInitPop.currentIndexChanged.connect(lambda event: changePresetsInitPop(constantPresetInitPop.currentText()))
 button_layout.addWidget(pause_button)
 button_layout.addWidget(reset_button)
 button_layout.addWidget(speed_button)
-button_layout.addWidget(constantPreset)
+button_layout.addWidget(constantPresetEq)
+button_layout.addWidget(constantPresetInitPop)
 
 # Number inputs to modify grid parameters
 param_layout = QFormLayout()
@@ -135,16 +133,13 @@ zombie_loss_input = QLineEdit(str(INIT_ZOMBIE_LOSS))
 zombie_loss = INIT_ZOMBIE_LOSS
 grid_size_input = QLineEdit(str(INITGRIDSIZE))
 grid_size = INITGRIDSIZE
-speed_input = QLineEdit(",".join(map(str, INIT_SPEEDS)))
-speeds = INIT_SPEEDS
 
 param_layout.addRow("Total Population", total_pop_input)
 param_layout.addRow("Inital Zombie Amount", init_z0_input)
-param_layout.addRow("Infection Growth", infection_growth_input)
+param_layout.addRow("Infection Growth [-1,1]", infection_growth_input)
 param_layout.addRow("Human Loss (b term in -bZ)", human_loss_input)
 param_layout.addRow("Zombie Loss (c term in -cH)", zombie_loss_input)
 param_layout.addRow("Grid Size", grid_size_input)
-param_layout.addRow("Simulation Speeds", speed_input)
 layout.addLayout(param_layout)
 
 # Simulation state variables
@@ -159,7 +154,9 @@ recovered_populations_solver = []
 def update_grid():
     """Update the grid image with a dynamic colormap range so that 0 maps to white."""
     current_grid = grid.grid
-    grid_view.setLevels(min=-0.1, max=0.1)
+    range_val = grid.popSize/(grid.squareSize*grid.squareSize)/5
+
+    grid_view.setLevels(min=-range_val, max=range_val)
     grid_view.setImage(current_grid.T, autoLevels=False)
 
 def update_sim_plot():
@@ -167,16 +164,12 @@ def update_sim_plot():
     zombie_curve_sim.setData(time_stamps[:min_z_sim], zombie_populations_sim[:min_z_sim])
     min_h_sim = min(len(time_stamps),len(human_populations_sim))
     human_curve_sim.setData(time_stamps[:min_h_sim], human_populations_sim[:min_h_sim])
-    min_r_sim = min(len(time_stamps),len(recovered_populations_sim))
-    recovered_curve_sim.setData(time_stamps[:min_r_sim], recovered_populations_sim[:min_r_sim])
 
 def update_solver_plot():
     min_z_sol = min(len(time_stamps),len(zombie_populations_solver))
     zombie_curve_solver.setData(time_stamps[:min_z_sol], zombie_populations_solver[:min_z_sol])
     min_h_sol = min(len(time_stamps),len(human_populations_solver))
     human_curve_solver.setData(time_stamps[:min_h_sol], human_populations_solver[:min_h_sol])
-    min_r_sol = min(len(time_stamps),len(recovered_populations_solver))
-    recovered_curve_solver.setData(time_stamps[:min_r_sol], recovered_populations_solver[:min_r_sol])
 
 def toggle_pause():
     global paused
@@ -229,10 +222,13 @@ def updateInputs() -> bool:
         if init_z0 != new_init_z0:
             changed = True
             init_z0 = new_init_z0
-        new_infection_growth = float(infection_growth_input.text())
+        new_infection_growth = np.clip(float(infection_growth_input.text()),-1,1)
         if infection_growth != new_infection_growth:
-            changed = True
             infection_growth = new_infection_growth
+            infection_growth_input.setText(str(new_infection_growth))
+            changed = True
+
+
         new_human_loss = float(human_loss_input.text())
         if human_loss != new_human_loss:
             changed = True
@@ -256,13 +252,26 @@ class SimulationThread(QThread):
         global hitApoc
         hitApoc = False
         while True:
-            updateInputs()
+            if updateInputs():
+                reset_button.setText("Restart Simulation to apply Changes")
             if paused:
                 continue
-            if grid.isApocalypse():
+            atoi = 1e-1
+            if grid.isApocalypse(atoi) and solver.isApocalypse(grid.timePassed,atoi):
                 if not hitApoc:
-                    finText = "Winner: Humans!" if grid.getHumanPopulation() > 0 else "Winner: Zombies :("
-                    self.setWindowTitle.emit(finText)
+                    print("OVER")
+                    sim_humans_dead = np.isclose(grid.getHumanPopulation(),0,atol=atoi)
+                    solver_humans_dead = np.isclose(solver.getHumanPopulation(grid.timePassed),0,atol=atoi)
+                    if not sim_humans_dead and not solver_humans_dead:
+                        finText = "Uninamous Winner: Humans!"
+                    elif not sim_humans_dead:
+                        finText = "Grid thinks Humans, Solver thinks Zombies!"
+                    elif not solver_humans_dead:
+                        finText = "Grid thinks Zombies, Solver thinks Humans!"
+                    else:
+                        finText = "Uninamous Winner: Zombies :("
+
+                    reset_button.setText(f"{finText} | Restart")
                     hitApoc = True
             else:
                 if hitApoc:
@@ -275,7 +284,7 @@ class SimulationThread(QThread):
                 recovered_populations_sim.append(r_sim)
                 
                 # Solver computations if necessary
-                z_sol, h_sol, r_sol = solver.getZombiePopulation(grid.timePassed/30), solver.getHumanPopulation(grid.timePassed/30), solver.getRecoveredPopulation(grid.timePassed/30) # Replace with real solver output
+                z_sol, h_sol, r_sol = solver.getZombiePopulation(grid.timePassed), solver.getHumanPopulation(grid.timePassed), solver.getRecoveredPopulation(grid.timePassed) # Replace with real solver output
                 zombie_populations_solver.append(z_sol)
                 human_populations_solver.append(h_sol)
                 recovered_populations_solver.append(r_sol)

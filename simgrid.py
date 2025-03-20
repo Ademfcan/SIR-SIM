@@ -10,7 +10,7 @@ class SimGrid:
         gridCellCount = squareSize * squareSize  # nearest "resolution of grid"
         return gridCellCount, squareSize
 
-    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, gridCellCount=1000, moveProb=0.6):
+    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, gridCellCount=1000, moveProb=0.05):
         self.popSize = populationSize
         self.moveProb = moveProb
 
@@ -91,9 +91,8 @@ class SimGrid:
         else:
             return abs(np.sum(self.grid[self.grid > 0]))
 
-    def isApocalypse(self):
-        return False
-        # return np.isclose(self.getHumanPopulation(),0,atol=1e-5) or np.isclose(self.getZombiePopulation(),0,atol=1e-5)
+    def isApocalypse(self, atoi=1e-3):
+        return np.isclose(self.getHumanPopulation(),0,atol=atoi) or np.isclose(self.getZombiePopulation(),0,atol=atoi)
 
 if __name__ == "__main__":
     grid = SimGrid(1000, 10,0.1, 0.5, 0.1)

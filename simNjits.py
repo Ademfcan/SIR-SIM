@@ -52,17 +52,11 @@ def propagateInteractionsCELL(grid, row, col, changeGrid, infectionGrowth, zombi
 
         interactionAbs = min(cellPopAbs,neighborPopAbs) # imagine that one zombie can interact with 1 person max         
 
-        neighborLoss = humanLoss if neighborHumanDominated else zombieLoss
-        neighborGrowthDir = humanDir if neighborHumanDominated else zombieDir
 
         change = interactionAbs * infectionGrowth * zombieDir
         
-        cellChangeLoss = neighborPopAbs * cellLoss * cellGrowthDir
-        cellChange = change - cellChangeLoss 
-
-        
-        neighborChangeLoss = cellPopAbs * neighborLoss * neighborGrowthDir
-        neighborChange = change - neighborChangeLoss
+        cellChangeLoss = interactionAbs/neighborPopAbs * cellLoss * cellGrowthDir
+        cellChange = change# - cellChangeLoss 
 
         changeGrid[row, col] += cellChange
         # changeGrid[neighborRow, neighborCol] += neighborChange
