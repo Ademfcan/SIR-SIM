@@ -55,8 +55,8 @@ def propagateInteractionsCELL(grid, row, col, changeGrid, infectionGrowth, zombi
 
         change = interactionAbs * infectionGrowth * zombieDir
         
-        cellChangeLoss = interactionAbs/neighborPopAbs * cellLoss * cellGrowthDir
-        cellChange = change# - cellChangeLoss 
+        cellChangeLoss = min(interactionAbs * cellLoss * cellGrowthDir,cellPopAbs)
+        cellChange = change - cellChangeLoss 
 
         changeGrid[row, col] += cellChange
         # changeGrid[neighborRow, neighborCol] += neighborChange

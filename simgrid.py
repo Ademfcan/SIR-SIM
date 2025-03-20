@@ -46,16 +46,19 @@ class SimGrid:
         self.humanLoss = loss
 
     def _initialize_grid(self, z0, h0):
-        self._initialize_population(z0, self.zombieDir)
         self._initialize_population(h0, self.humanDir)
+        self._initialize_population(z0, self.zombieDir, override=z0 < 50)
 
-    def _initialize_population(self, population_count, direction):
+    def _initialize_population(self, population_count, direction, override=False):
         # Randomly assign population to grid cells
         indices = np.random.randint(0, self.gridCellCount, population_count)
         rows, cols = np.unravel_index(indices, (self.squareSize, self.squareSize))
         for row, col in zip(rows, cols):
-            self.grid[row, col] += direction
-    
+            if override:
+                self.grid[row, col] = direction
+            else:
+                self.grid[row, col] += direction
+
     def propagate(self, timeStep=1):
         """ Given a timestep goes over every cell, and applies the growth and loss equations for either humans or zombies """
         self.timePassed += timeStep

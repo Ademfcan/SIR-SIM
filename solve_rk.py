@@ -2,7 +2,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 class Solver:
-    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, block_size=2, maxInteract=100):
+    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, block_size=2, t_scalar=2):
         self.h0 = populationSize - z0  # Initial human population
         self.z0 = z0  # Initial zombie population
         self.infectionGrowth = infectionGrowth  # Infection rate
@@ -11,6 +11,7 @@ class Solver:
         self.block_size = block_size  # Time block size
         self.total_population = populationSize  # Assume constant total
         self.interactionScale = 1 / self.total_population
+        self.t_scalar = t_scalar
 
         self.blocks = {}  # Cache for computed time blocks
         self.last_block_start = None  # Track the start time of the last computed block
@@ -20,8 +21,8 @@ class Solver:
         H, Z = y
         H, Z = y
         scaled_interaction = self.interactionScale * H * Z
-        dHdt = -self.infectionGrowth * scaled_interaction - self.humanLoss * Z * self.interactionScale
-        dZdt =  self.infectionGrowth * scaled_interaction - self.zombieLoss * H * self.interactionScale
+        dHdt = np.clip(-self.infectionGrowth * scaled_interaction - self.humanLoss * Z * self.interactionScale,-H,Z)
+        dZdt = np.clip(self.infectionGrowth * scaled_interaction - self.zombieLoss * H * self.interactionScale,-Z,H)
 
         return [dHdt, dZdt]
 
@@ -51,7 +52,6 @@ class Solver:
     def _get_nearest_value(self, sol, t):
         """Find the nearest computed value in a solved block."""
         idx = np.abs(sol.t - t).argmin()
-        print(sol)
         return sol.y[:, idx]
 
     def _ensure_block(self, t):
@@ -73,12 +73,14 @@ class Solver:
 
     def getHumanPopulation(self, t):
         """Return H(t), computing new blocks if needed."""
+        t = t/self.t_scalar
         blocked_t = self._ensure_block(t)
         return self._get_nearest_value(self.blocks[blocked_t], t)[0]
     
 
     def getZombiePopulation(self, t):
         """Return Z(t), computing new blocks if needed."""
+        t = t/self.t_scalar
         blocked_t = self._ensure_block(t)
         return self._get_nearest_value(self.blocks[blocked_t], t)[1]
 

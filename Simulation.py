@@ -8,14 +8,14 @@ from solve_rk import Solver
 
 # Initial conditions
 INIT_POPSIZE = int(1e3)
-INIT_Z0 = int(2e2)
-INIT_INFECTION_GROWTH = 0.01
+INIT_Z0 = int(10)
+INIT_INFECTION_GROWTH = 0.1
 INIT_HUMAN_LOSS = 0
-INIT_ZOMBIE_LOSS = 0.005
+INIT_ZOMBIE_LOSS = 0.05
 INITGRIDSIZE = int(1e3)
 
 # Simulation speed settings
-speeds = [1, 2, 5, 0.5, 0.1]
+speeds = [1, 2, 5, 10, 0.5, 0.1]
 speed_idx = 0
 currentSpeedFactor = 1
 paused = False
@@ -23,16 +23,16 @@ paused = False
 
 preset_values_eq = {
     "Classic Apocalypse": {"a": INIT_INFECTION_GROWTH, "b": INIT_ZOMBIE_LOSS, "c": INIT_HUMAN_LOSS},
-    "Raging Outbreak": {"a": 0.1, "b": 0.002, "c": 0},
-    "Human Resistance": {"a": 0.02, "b": 0.02, "c": 0},
-    "Human Uprising": {"a": 0.02, "b": 0.1, "c": 0},
-    "Doomsday Virus": {"a": 0.1, "b": 0, "c": 0},
+    "Raging Outbreak": {"a": 0.2, "b": 0.02, "c": 0},
+    "Human Resistance": {"a": 0.02, "b": 0.1, "c": 0},
+    "Human Uprising": {"a": 0.02, "b": 0.5, "c": 0},
+    "Doomsday Virus": {"a": 1, "b": 0, "c": 0},
 }
 
 preset_values_init_pop = {
     "Small Infection": {"pop": 1010, "z0": 10},
     "Progressed Infection": {"pop": 1100, "z0": 100},
-    "\"The 0.1%\"": {"pop": 1000, "z0": 1},
+    "One in a thousand": {"pop": 1000, "z0": 1},
 }
 
 def changePresetsEq(preset_name):
@@ -134,6 +134,12 @@ zombie_loss = INIT_ZOMBIE_LOSS
 grid_size_input = QLineEdit(str(INITGRIDSIZE))
 grid_size = INITGRIDSIZE
 
+fullEquationHumans = QLabel()
+fullEquationZombies = QLabel()
+
+
+param_layout.addRow("dH/dt", fullEquationHumans)
+param_layout.addRow("dZ/dt", fullEquationZombies)
 param_layout.addRow("Total Population", total_pop_input)
 param_layout.addRow("Inital Zombie Amount", init_z0_input)
 param_layout.addRow("Infection Growth [-1,1]", infection_growth_input)
@@ -181,6 +187,9 @@ def reset_simulation():
     global human_growth, human_loss, zombie_growth, zombie_loss, grid_size
     reset_button.setStyleSheet("")
     reset_button.setText("Reset")
+    fullEquationHumans.setText(f"dH/dt = -{infection_growth}H*Z - {human_loss}*Z")
+    fullEquationZombies.setText(f"dZ/dt = {infection_growth}H*Z - {zombie_loss}*H")
+
     # Reinitialize the grid with new parameters
     real_grid_size, _ = SimGrid.getNearestSquareCellCount(grid_size)
     grid_size_input.setText(str(real_grid_size))
@@ -209,6 +218,29 @@ reset_button.clicked.connect(reset_simulation)
 speed_button.clicked.connect(toggle_speed)
 
 SLEEPTIME = 10  # milliseconds for UI responsiveness
+
+def saveAndMove():
+    # Capture the current window and save it
+    frame = win.grab()
+    title = f"{constantPresetEq.currentText()}_{constantPresetInitPop.currentText()}.png"
+    frame.save(f"Tests/{title}", "PNG")
+    
+    # Move to the next init pop preset; if at the end, move to next eq preset and reset init pop to first.
+    current_init_index = constantPresetInitPop.currentIndex()
+    if current_init_index < constantPresetInitPop.count()-1:
+        constantPresetInitPop.setCurrentIndex(current_init_index + 1)
+    else:
+        constantPresetInitPop.setCurrentIndex(0)
+        current_eq_index = constantPresetEq.currentIndex()
+        if current_eq_index < constantPresetEq.count()-1:
+            constantPresetEq.setCurrentIndex(current_eq_index + 1)
+        else:
+            # If we've reached the last eq preset, loop back to the beginning.
+            constantPresetEq.setCurrentIndex(0)
+    updateInputs()
+    
+    # Reset the simulation with the new preset options.
+    reset_simulation()
 
 def updateInputs() -> bool:
     global human_growth, human_loss, zombie_growth, zombie_loss, grid_size, total_pop, init_z0, infection_growth
@@ -245,21 +277,32 @@ def updateInputs() -> bool:
     except ValueError:
         return False
 
+def updateEquations():
+    fullEquationHumans.setText(f"dH/dt = -{infection_growth}H*Z - {human_loss}*Z")
+    fullEquationZombies.setText(f"dZ/dt = {infection_growth}H*Z - {zombie_loss}*H")
+
+def generalguiupdate():
+    updateEquations()
+
 class SimulationThread(QThread):
+    triggerSaveAndMove = pyqtSignal()
     dataChanged = pyqtSignal()
+    generalupdate = pyqtSignal()
 
     def run(self):
         global hitApoc
         hitApoc = False
+        self.generalupdate.emit()
         while True:
             if updateInputs():
                 reset_button.setText("Restart Simulation to apply Changes")
+                self.generalupdate.emit()
+
             if paused:
                 continue
-            atoi = 1e-1
+            atoi = 0.3
             if grid.isApocalypse(atoi) and solver.isApocalypse(grid.timePassed,atoi):
                 if not hitApoc:
-                    print("OVER")
                     sim_humans_dead = np.isclose(grid.getHumanPopulation(),0,atol=atoi)
                     solver_humans_dead = np.isclose(solver.getHumanPopulation(grid.timePassed),0,atol=atoi)
                     if not sim_humans_dead and not solver_humans_dead:
@@ -272,7 +315,14 @@ class SimulationThread(QThread):
                         finText = "Uninamous Winner: Zombies :("
 
                     reset_button.setText(f"{finText} | Restart")
+                    # self.triggerSaveAndMove.emit()
+                    
                     hitApoc = True
+            elif grid.timePassed > 50000:
+                finText = "Stagnated!"
+                reset_button.setText(f"{finText} | Restart")
+                self.triggerSaveAndMove.emit()
+                hitApoc = True
             else:
                 if hitApoc:
                     hitApoc = False
@@ -297,6 +347,8 @@ sim_thread = SimulationThread()
 sim_thread.dataChanged.connect(update_grid)
 sim_thread.dataChanged.connect(update_sim_plot)
 sim_thread.dataChanged.connect(update_solver_plot)
+sim_thread.triggerSaveAndMove.connect(saveAndMove)
+sim_thread.generalupdate.connect(generalguiupdate)
 sim_thread.start()
 
 win.show()
