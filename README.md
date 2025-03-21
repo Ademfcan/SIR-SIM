@@ -14,3 +14,6 @@ To run the simulation, run the following file:
 
 ```python Simulation.py```
 
+Tweak parameters and see what happens!
+
+![Example Image](Images/Classic_Apocalypse_Progressed_Infection.png)
