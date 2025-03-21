@@ -320,11 +320,12 @@ class SimulationThread(QThread):
                     # self.triggerSaveAndMove.emit()
                     
                     hitApoc = True
-            elif grid.timePassed > 50000:
-                finText = "Stagnated!"
-                reset_button.setText(f"{finText} | Restart")
-                self.triggerSaveAndMove.emit()
-                hitApoc = True
+            # also uncomment this if you want the same as above
+            # elif grid.timePassed > 50000:
+            #     finText = "Stagnated!"
+            #     reset_button.setText(f"{finText} | Restart")
+            #     self.triggerSaveAndMove.emit()
+            #     hitApoc = True
             else:
                 if hitApoc:
                     hitApoc = False
