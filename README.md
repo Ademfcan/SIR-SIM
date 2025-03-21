@@ -7,7 +7,7 @@ This was created using python 3.13.1, but will likely work on older (3.9+) versi
 
 Ensure dependencies are installed using:
 
-```pip install -r requirements.txt````
+```pip install -r requirements.txt```
 
 ## Running the Simulation
 To run the simulation, run the following file:
