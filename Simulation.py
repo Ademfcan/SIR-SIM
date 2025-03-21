@@ -315,6 +315,8 @@ class SimulationThread(QThread):
                         finText = "Uninamous Winner: Zombies :("
 
                     reset_button.setText(f"{finText} | Restart")
+
+                    # uncomment this line if you want the simulation to screenshot this frame (pyqt window only!) and then move on to next preset config
                     # self.triggerSaveAndMove.emit()
                     
                     hitApoc = True

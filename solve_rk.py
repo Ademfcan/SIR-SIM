@@ -2,7 +2,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 class Solver:
-    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, block_size=2, t_scalar=2):
+    def __init__(self, populationSize, z0, infectionGrowth, zombieLoss, humanLoss, block_size=2, t_scalar=5):
         self.h0 = populationSize - z0  # Initial human population
         self.z0 = z0  # Initial zombie population
         self.infectionGrowth = infectionGrowth  # Infection rate
